@@ -1,0 +1,16 @@
+{application, mms,
+    [
+        {description, ""},
+        {vsn, "1"},
+        {registered, []},
+        {applications, [
+            kernel,
+            stdlib,
+            inets,
+            ssl,
+            public_key,
+            cowboy
+        ]},
+        {mod, {mms_app, []}},
+        {env, []}
+    ]}.
