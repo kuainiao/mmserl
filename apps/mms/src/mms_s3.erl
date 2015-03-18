@@ -17,6 +17,7 @@ config() ->
     #aws_config{
         access_key_id = ?GET_ENV(s3_key),
         secret_access_key = ?GET_ENV(s3_secret),
+        s3_host = ?GET_ENV(s3_host),
         timeout = ?GET_ENV(s3_timeout)
     }.
 

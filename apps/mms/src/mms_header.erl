@@ -65,9 +65,9 @@ verify_upload(Req) ->
     case cowboy_req:header(<<"token">>, Req) of
         undefined -> false;
         Token ->
-            case mms_redis:get(<<"upload_token:",Token/binary>>) of
-                {ok, _} -> true;
-                _ -> false
+            case mms_redis:get(<<"upload_token:", Token/binary>>) of
+                {error, _} -> false;
+                _ -> true
             end
     end.
 
