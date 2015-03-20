@@ -14,7 +14,8 @@
     filename :: binary(),
     filesize :: integer(),
     range :: #mms_range{} | undefined,
-    owner :: binary()
+    owner :: binary(),
+    token :: binary()
 }).
 
 -define(GET_ENV(Key), mms_lib:get_env(Key)).

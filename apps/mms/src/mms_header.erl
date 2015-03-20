@@ -15,7 +15,8 @@ parse(Req) ->
     FileSize = parse_filesize(Req),
     Range = parse_range(Req),
     Owner = parse_owner(Req),
-    case lists:member(undefined, [FileSize, Range, Owner]) of
+    Token = parse_token(Req),
+    case lists:member(undefined, [FileSize, Range, Owner, Token]) of
         true -> false;
         _ ->
             #mms_headers{
@@ -23,7 +24,8 @@ parse(Req) ->
                 filename = parse_filename(Req),
                 filesize = FileSize,
                 range = Range,
-                owner = Owner
+                owner = Owner,
+                token = Token
             }
     end.
 
@@ -56,13 +58,15 @@ parse_range(Req) ->
             end
     end.
 
+parse_token(Req) ->
+    cowboy_req:header(<<"token">>, Req, undefined).
+
 parse_body(Req) ->
     {ok, _, Req2} = cowboy_req:part(Req),
-    {ok, Data, _} = cowboy_req:part_body(Req2),
-    Data.
+    cowboy_req:part_body(Req2).
 
 verify_upload(Req) ->
-    case cowboy_req:header(<<"token">>, Req) of
+    case parse_token(Req) of
         undefined -> false;
         Token ->
             case mms_redis:get(<<"upload_token:", Token/binary>>) of

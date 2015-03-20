@@ -4,16 +4,16 @@
 import requests
 
 
-def post_file():
+def post_file(ip, token):
 
-    url = 'http://127.0.0.1:8080/upload'
+    url = 'http://%s:8080/upload' % ip
     files = {'inputfile': open('test.dat', 'rb')}
     headers = {
         'range': 'bytes=0-600',
-        'token': 'abcde',
+        'token': token,
         'filesize': 600,
-        'filename': 'test1',
-        'owner': '12345adfadfadfadfadfadfadfadfadsfadfadsf@localhost'
+        'filename': 'test2',
+        'owner': 'adsfadsfad@localhost',
     }
     r = requests.post(url, headers=headers, files=files)
 
@@ -21,4 +21,4 @@ def post_file():
     print r.text
 
 if __name__ == '__main__':
-    post_file()
+    post_file('127.0.0.1', '8b76c441-2ae5-4676-97c4-721c45895543')
