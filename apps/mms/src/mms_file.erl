@@ -7,9 +7,7 @@
 
 
 %% API
--export([append/2, read/1, write/2, append_data/2]).
-generate_filename() ->
-    ok.
+-export([append/2, read/1, write/2, append_data/2, delete/1]).
 
 append(FileName, AppendData) ->
     file:write_file("files/" ++ FileName, AppendData, [append]).
@@ -23,3 +21,6 @@ append_data(FileName, Data) ->
 
 write(FileName, Data) ->
     file:write_file("files/" ++ FileName, Data, [write]).
+
+delete(FileName) ->
+    file:delete("files/" ++ FileName).

@@ -12,20 +12,23 @@
 
 
 parse(Req) ->
+    Uid = parse_uid(Req),
     FileSize = parse_filesize(Req),
     Range = parse_range(Req),
     Owner = parse_owner(Req),
     Token = parse_token(Req),
-    case lists:member(undefined, [FileSize, Range, Owner, Token]) of
+    Expiration = parse_expiration(Req),
+    case lists:member(undefined, [Uid, FileSize, Range, Owner, Token, Expiration]) of
         true -> false;
         _ ->
             #mms_headers{
-                uid = parse_uid(Req),
+                uid = Uid,
                 filename = parse_filename(Req),
                 filesize = FileSize,
                 range = Range,
                 owner = Owner,
-                token = Token
+                token = Token,
+                expiration = Expiration
             }
     end.
 
@@ -47,33 +50,54 @@ parse_owner(Req) ->
     cowboy_req:header(<<"owner">>, Req, undefined).
 
 parse_range(Req) ->
-    Range = cowboy_req:header(<<"range">>, Req),
+    Range = cowboy_req:header(<<"range">>, Req, undefined),
     case Range of
         undefined -> undefined;
         _ ->
-            case cowboy_http:range(Range) of
-                {<<"bytes">>, [{S, E}]} ->
-                    #mms_range{start_bytes = S, end_bytes = E};
-                _ -> undefined
+            case range(Range) of
+                undefined -> undefined;
+                R -> R
             end
     end.
 
 parse_token(Req) ->
     cowboy_req:header(<<"token">>, Req, undefined).
 
+parse_expiration(Req) ->
+    E = cowboy_req:header(<<"expiration">>, Req, undefined),
+    try binary_to_integer(E) of
+        I -> I
+    catch
+        _:_ -> undefined
+    end.
+
 parse_body(Req) ->
     {ok, _, Req2} = cowboy_req:part(Req),
     cowboy_req:part_body(Req2).
 
-verify_upload(Req) ->
-    case parse_token(Req) of
-        undefined -> false;
-        Token ->
-            case mms_redis:get(<<"upload_token:", Token/binary>>) of
-                {error, _} -> false;
-                _ -> true
-            end
+-spec verify_upload(#mms_headers{}) -> true | false.
+verify_upload(#mms_headers{token = Token, uid = Uid, expiration = Expiration}) ->
+    case generate_timestamp() =< Expiration of
+        true ->
+            case mms_redis:get(<<"upload:", Uid/binary>>) of
+                {ok, _} ->
+                    E = integer_to_binary(Expiration),
+                    S = iolist_to_binary(mms_s3:upload_secret()),
+                    Token =:= iolist_to_binary(md5(<<Uid/binary, E/binary, S/binary>>));
+                _ ->
+                    false
+            end;
+        false ->
+            false
     end.
+
+-spec md5(string() | binary()) -> string().
+md5(Text) ->
+    lists:flatten([io_lib:format("~.16b", [N]) || N <- binary_to_list(erlang:md5(Text))]).
+
+generate_timestamp() ->
+    {M, S, _} = erlang:now(),
+    M * 1000000 + S.
 
 action(#mms_range{start_bytes = S, end_bytes = E}, FileSize) ->
     case FileSize of
@@ -88,3 +112,12 @@ action(#mms_range{start_bytes = S, end_bytes = E}, FileSize) ->
                 _ -> append_file
             end
     end.
+
+%% special range parse, like "bytes=0-600"
+range(<<"bytes=", Rest/binary>>) ->
+    [S, E] = binary:split(Rest, <<"-">>),
+    #mms_range{start_bytes = binary_to_integer(S), end_bytes = binary_to_integer(E)};
+range(_Range) ->
+    undefined.
+
+

@@ -5,7 +5,7 @@
 
 -module(mms_s3).
 
--export([config/0, bucket/0, start/0, get/1, upload/2]).
+-export([config/0, bucket/0, start/0, get/1, upload/2, upload_secret/0]).
 
 -include("mms.hrl").
 -include_lib("erlcloud/include/erlcloud_aws.hrl").
@@ -23,6 +23,9 @@ config() ->
 
 bucket() ->
     ?GET_ENV(s3_bucket).
+
+upload_secret() ->
+    ?GET_ENV(upload_secret).
 
 -spec get(binary()) -> binary().
 get(Uid) ->

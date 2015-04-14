@@ -18,7 +18,7 @@ get(Key) ->
         {ok, undefined} ->
             {error, not_found};
         {ok, Result} ->
-            Result;
+            {ok, Result};
         Error ->
             {error, Error}
     end.
