@@ -6,10 +6,14 @@
 -module(mms_header).
 
 %% API
--export([verify_upload/1, parse/1, parse_body/1, action/2]).
+-export([verify/1, parse/1, parse_body/1, action/2]).
 
 -include("mms.hrl").
 
+
+%% ==================================
+%% parse header
+%% ==================================
 
 parse(Req) ->
     Uid = parse_uid(Req),
@@ -25,13 +29,13 @@ parse(Req) ->
                 uid = Uid,
                 filename = parse_filename(Req),
                 filesize = FileSize,
+                public = parse_public(Req),
                 range = Range,
                 owner = Owner,
                 token = Token,
                 expiration = Expiration
             }
     end.
-
 
 parse_uid(Req) ->
     cowboy_req:header(<<"uid">>, Req, undefined).
@@ -44,6 +48,12 @@ parse_filesize(Req) ->
         FileSize -> FileSize
     catch
         _:_ -> undefined
+    end.
+
+parse_public(Req) ->
+    case cowboy_req:header(<<"public">>, Req, ?PRIVATE) of
+        ?PUBLIC -> ?PUBLIC;
+        _ -> ?PRIVATE
     end.
 
 parse_owner(Req) ->
@@ -75,8 +85,13 @@ parse_body(Req) ->
     {ok, _, Req2} = cowboy_req:part(Req),
     cowboy_req:part_body(Req2).
 
--spec verify_upload(#mms_headers{}) -> true | false.
-verify_upload(#mms_headers{token = Token, uid = Uid, expiration = Expiration}) ->
+
+%% ==================================
+%% verify
+%% ==================================
+
+-spec verify(#mms_headers{}) -> true | false.
+verify(#mms_headers{token = Token, uid = Uid, expiration = Expiration}) ->
     case generate_timestamp() =< Expiration of
         true ->
             case mms_redis:get(<<"upload:", Uid/binary>>) of

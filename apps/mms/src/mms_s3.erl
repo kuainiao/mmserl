@@ -5,7 +5,7 @@
 
 -module(mms_s3).
 
--export([config/0, bucket/0, start/0, get/1, upload/2, upload_secret/0]).
+-export([config/0, bucket/1, start/0, get/1, upload/2, upload_secret/0]).
 
 -include("mms.hrl").
 -include_lib("erlcloud/include/erlcloud_aws.hrl").
@@ -21,7 +21,10 @@ config() ->
         timeout = ?GET_ENV(s3_timeout)
     }.
 
-bucket() ->
+-spec bucket(binary()) -> binary().
+bucket(?PUBLIC) ->
+    ?GET_ENV(s3_public_bucket);
+bucket(_) ->
     ?GET_ENV(s3_bucket).
 
 upload_secret() ->
@@ -29,11 +32,16 @@ upload_secret() ->
 
 -spec get(binary()) -> binary().
 get(Uid) ->
-    erlcloud_s3:make_link(30 * 60, ?BUCKET, binary_to_list(Uid), ?S3_CONFIG).
+    case mms_mysql:get(Uid) of
+        {error, _} ->
+            error;
+        File ->
+            erlcloud_s3:make_link(30 * 60, bucket(File#mms_file.public), binary_to_list(Uid), ?S3_CONFIG)
+    end.
 
--spec upload(binary(), binary()) -> ok.
-upload(Uid, Data) ->
-    try erlcloud_s3:put_object(?BUCKET, binary_to_list(Uid), Data, ?S3_CONFIG) of
+-spec upload(#mms_file{}, binary()) -> ok | error.
+upload(File, Content) ->
+    try erlcloud_s3:put_object(bucket(File#mms_file.public), binary_to_list(File#mms_file.uid), Content, ?S3_CONFIG) of
         _ -> ok
     catch
         _:_ -> error

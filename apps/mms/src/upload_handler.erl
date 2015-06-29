@@ -9,6 +9,11 @@
 
 -include("mms.hrl").
 
+
+%% =========================
+%% api
+%% =========================
+
 init(Req, Opts) ->
     case mms_header:parse(Req) of
         #mms_headers{
@@ -16,34 +21,41 @@ init(Req, Opts) ->
             uid = Uid,
             owner = Owner,
             range = Range,
-            filesize = FileSize
+            filesize = FileSize,
+            public = Public
         } = Headers ->
-            case mms_header:verify_upload(Headers) of
+            case mms_header:verify(Headers) of
                 false ->
                     mms_response:bad_request(Req, Opts, <<"bad request">>);
                 _ ->
-                    {ok, Data, Req3} = mms_header:parse_body(Req),
+                    {ok, Content, Req3} = mms_header:parse_body(Req),
+                    File = #mms_file{uid = Uid, filename = FileName, owner = Owner, public = Public},
                     case mms_header:action(Range, FileSize) of
                         upload ->
-                            upload(Req3, Opts, Uid, FileName, Owner, Data, false);
+                            upload(Req3, Opts, File, Content, false);
                         append_upload ->
-                            Data2 = mms_file:append_data(Uid, Data),
-                            upload(Req3, Opts, Uid, FileName, Owner, Data2, true);
+                            Content2 = mms_file:append_data(Uid, Content),
+                            upload(Req3, Opts, File, Content2, true);
                         new_file ->
-                            append_file(Req3, Opts, Uid, Data);
+                            append_file(Req3, Opts, Uid, Content);
                         append_file ->
-                            append_file(Req3, Opts, Uid, Data)
+                            append_file(Req3, Opts, Uid, Content)
                     end
             end;
         _ ->
             mms_response:bad_request(Req, Opts, <<"bad request">>)
     end.
 
-upload(Req3, Opts, Uid, FileName, Owner, Data, DeleteFile) ->
-    case mms_s3:upload(Uid, Data) of
+
+%% ===========================
+%% helper
+%% ===========================
+
+upload(Req3, Opts, #mms_file{uid = Uid} = File, Data, DeleteFile) ->
+    case mms_s3:upload(File, Data) of
         ok ->
             mms_redis:remove(<<"upload:", Uid/binary>>),
-            case mms_mysql:save(Uid, FileName, Owner) of
+            case mms_mysql:save(File) of
                 {error, _} ->
                     case DeleteFile of
                         true ->
@@ -59,6 +71,6 @@ upload(Req3, Opts, Uid, FileName, Owner, Data, DeleteFile) ->
             mms_response:bad_request(Req3, Opts, <<"upload error">>)
     end.
 
-append_file(Req3, Opts, Uid, Data) ->
-    mms_file:append(Uid, Data),
+append_file(Req3, Opts, Uid, Content) ->
+    mms_file:append(Uid, Content),
     mms_response:ok(Req3, Opts, Uid).
