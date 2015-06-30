@@ -13,6 +13,7 @@ app_start() ->
     mms_mysql:start(),
     mms_redis:start().
 
+-spec get_env(atom()) -> string() | integer() | undefined.
 get_env(Key) ->
     case application:get_env(mms, Key) of
         {ok, Val} -> Val;

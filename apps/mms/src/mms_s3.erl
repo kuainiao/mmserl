@@ -5,44 +5,52 @@
 
 -module(mms_s3).
 
--export([config/0, bucket/1, start/0, get/1, upload/2, upload_secret/0]).
+-export([config/0, bucket/1, start/0, get/2, upload/2, secret/0]).
 
--include("mms.hrl").
 -include_lib("erlcloud/include/erlcloud_aws.hrl").
+-include("mms.hrl").
+
 
 start() ->
     erlcloud:start().
 
+-spec config() -> #aws_config{}.
 config() ->
     #aws_config{
-        access_key_id = ?GET_ENV(s3_key),
-        secret_access_key = ?GET_ENV(s3_secret),
-        s3_host = ?GET_ENV(s3_host),
-        timeout = ?GET_ENV(s3_timeout)
+        access_key_id = ?ENV(s3_key),
+        secret_access_key = ?ENV(s3_secret),
+        s3_host = ?ENV(s3_host),
+        timeout = ?ENV(s3_timeout)
     }.
 
--spec bucket(binary()) -> binary().
+-spec secret() -> binary() | undefined.
+secret() ->
+    ?ENV(upload_secret).
+
+-spec bucket(binary()) -> binary() | undefined.
 bucket(?PUBLIC) ->
-    ?GET_ENV(s3_public_bucket);
+    ?ENV(s3_public_bucket);
 bucket(_) ->
-    ?GET_ENV(s3_bucket).
+    ?ENV(s3_bucket).
 
-upload_secret() ->
-    ?GET_ENV(upload_secret).
-
--spec get(binary()) -> binary().
-get(Uid) ->
-    case mms_mysql:get(Uid) of
-        {error, _} ->
-            error;
-        File ->
-            erlcloud_s3:make_link(30 * 60, bucket(File#mms_file.public), binary_to_list(Uid), ?S3_CONFIG)
-    end.
-
--spec upload(#mms_file{}, binary()) -> ok | error.
-upload(File, Content) ->
-    try erlcloud_s3:put_object(bucket(File#mms_file.public), binary_to_list(File#mms_file.uid), Content, ?S3_CONFIG) of
-        _ -> ok
+-spec get(binary(), integer()) -> iodata() | error.
+get(#mms_file{uid = Uid, private = ?PUBLIC}, _) ->
+    Host = list_to_binary(?ENV(s3_host)),
+    Bucket = list_to_binary(bucket(?PUBLIC)),
+    <<"http://", Bucket/binary, ".", Host/binary, "/", Uid/binary>>;
+get(#mms_file{uid = Uid, private = Private}, Expire) ->
+    try erlcloud_s3:make_link(Expire, bucket(Private), Uid, ?S3_CONFIG) of
+        {_, H, P} -> H ++ P
     catch
         _:_ -> error
     end.
+
+-spec upload(#mms_file{}, binary()) -> ok | error.
+upload(#mms_file{uid = Uid, private = Private}, Content) ->
+    try erlcloud_s3:put_object(bucket(Private), binary_to_list(Uid), Content, ?S3_CONFIG) of
+        _ -> ok
+    catch
+        _:_Reason ->
+            error
+    end.
+

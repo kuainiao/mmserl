@@ -3,12 +3,13 @@
 %%%
 %%%-------------------------------------------------------------------
 
--define(PUBLIC, <<"1">>).
--define(PRIVATE, <<"0">>).
+%% is private
+-define(PUBLIC, <<"0">>).
+-define(PRIVATE, <<"1">>).
 
--define(GET_ENV(Key), mms_lib:get_env(Key)).
+-define(ENV(Key), mms_lib:get_env(Key)).
 -define(S3_CONFIG, mms_s3:config()).
-
+-define(MMS_SECRET, mms_s3:secret()).
 -define(DEBUG(X), io:format("debug:~p~n", [X])).
 
 
@@ -25,7 +26,7 @@
     uid :: binary(),
     filename :: binary(),
     filesize :: integer(),
-    public :: binary(),
+    private :: binary(),
     range :: #mms_range{},
     owner :: binary(),
     token :: binary(),
@@ -36,7 +37,7 @@
     filename :: binary(),
     owner :: binary(),
     uid :: binary(),
-    public :: public | private,
+    private :: public | private,
     created_at :: integer()
 }).
 

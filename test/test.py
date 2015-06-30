@@ -1,18 +1,20 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+import os
 import requests
 
 ip = '127.0.0.1'
 
 config = {
-    'uid': 'dd28e2ca-c263-4600-937f-0a18bddca054',
-    'range': 'bytes=0-600',
-    'token': 'dd28e2cdd28e2cdd28e2cdd28e2cdd28e2c',
-    'filesize': 600,
+    'uid': 'e9d3c28bd8fb4c0dae95be508945d3d1',
+    'range': 'bytes=0-%s' % os.path.getsize('test.dat'),
+    'token': 'eed9c49b3245e4ee55d0c9bca565f44c',
+    'private': '0',
+    'filesize': os.path.getsize('test.dat'),
     'filename': 'test.dat',
     'owner': 'adsfadsfad@localhost',
-    'expiration': 1429001366
+    'expiration': 1435658452
 }
 
 
@@ -28,3 +30,4 @@ def post_file(ip, config):
 
 if __name__ == '__main__':
     post_file(ip, config)
+

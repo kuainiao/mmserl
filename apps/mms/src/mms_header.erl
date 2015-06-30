@@ -29,7 +29,7 @@ parse(Req) ->
                 uid = Uid,
                 filename = parse_filename(Req),
                 filesize = FileSize,
-                public = parse_public(Req),
+                private = parse_private(Req),
                 range = Range,
                 owner = Owner,
                 token = Token,
@@ -50,8 +50,8 @@ parse_filesize(Req) ->
         _:_ -> undefined
     end.
 
-parse_public(Req) ->
-    case cowboy_req:header(<<"public">>, Req, ?PRIVATE) of
+parse_private(Req) ->
+    case cowboy_req:header(<<"private">>, Req, ?PRIVATE) of
         ?PUBLIC -> ?PUBLIC;
         _ -> ?PRIVATE
     end.
@@ -97,7 +97,7 @@ verify(#mms_headers{token = Token, uid = Uid, expiration = Expiration}) ->
             case mms_redis:get(<<"upload:", Uid/binary>>) of
                 {ok, _} ->
                     E = integer_to_binary(Expiration),
-                    S = iolist_to_binary(mms_s3:upload_secret()),
+                    S = list_to_binary(?MMS_SECRET),
                     Token =:= iolist_to_binary(md5(<<Uid/binary, E/binary, S/binary>>));
                 _ ->
                     false
@@ -131,7 +131,13 @@ action(#mms_range{start_bytes = S, end_bytes = E}, FileSize) ->
 %% special range parse, like "bytes=0-600"
 range(<<"bytes=", Rest/binary>>) ->
     [S, E] = binary:split(Rest, <<"-">>),
-    #mms_range{start_bytes = binary_to_integer(S), end_bytes = binary_to_integer(E)};
+    try {binary_to_integer(S), binary_to_integer(E)} of
+        {SI, EI} ->
+            #mms_range{start_bytes = SI, end_bytes = EI}
+    catch
+        _:_ ->
+            undefined
+    end;
 range(_Range) ->
     undefined.
 

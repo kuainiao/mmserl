@@ -22,14 +22,14 @@ init(Req, Opts) ->
             owner = Owner,
             range = Range,
             filesize = FileSize,
-            public = Public
+            private = Private
         } = Headers ->
             case mms_header:verify(Headers) of
                 false ->
                     mms_response:bad_request(Req, Opts, <<"bad request">>);
                 _ ->
                     {ok, Content, Req3} = mms_header:parse_body(Req),
-                    File = #mms_file{uid = Uid, filename = FileName, owner = Owner, public = Public},
+                    File = #mms_file{uid = Uid, filename = FileName, owner = Owner, private = Private},
                     case mms_header:action(Range, FileSize) of
                         upload ->
                             upload(Req3, Opts, File, Content, false);
@@ -51,8 +51,8 @@ init(Req, Opts) ->
 %% helper
 %% ===========================
 
-upload(Req3, Opts, #mms_file{uid = Uid} = File, Data, DeleteFile) ->
-    case mms_s3:upload(File, Data) of
+upload(Req3, Opts, #mms_file{uid = Uid} = File, Content, DeleteFile) ->
+    case mms_s3:upload(File, Content) of
         ok ->
             mms_redis:remove(<<"upload:", Uid/binary>>),
             case mms_mysql:save(File) of
