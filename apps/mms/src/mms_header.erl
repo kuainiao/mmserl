@@ -91,14 +91,14 @@ parse_body(Req) ->
 %% ==================================
 
 -spec verify(#mms_headers{}) -> true | false.
-verify(#mms_headers{token = Token, uid = Uid, expiration = Expiration}) ->
+verify(#mms_headers{owner = Owner, token = Token, uid = Uid, expiration = Expiration}) ->
     case generate_timestamp() =< Expiration of
         true ->
             case mms_redis:get(<<"upload:", Uid/binary>>) of
                 {ok, _} ->
                     E = integer_to_binary(Expiration),
                     S = list_to_binary(?MMS_SECRET),
-                    Token =:= iolist_to_binary(md5(<<Uid/binary, E/binary, S/binary>>));
+                    Token =:= iolist_to_binary(md5(<<Owner/binary, Uid/binary, E/binary, S/binary>>));
                 _ ->
                     false
             end;

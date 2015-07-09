@@ -37,7 +37,7 @@
     filename :: binary(),
     owner :: binary(),
     uid :: binary(),
-    private :: public | private,
+    private :: binary(),
     created_at :: integer()
 }).
 

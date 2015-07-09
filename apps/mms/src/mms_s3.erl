@@ -5,7 +5,7 @@
 
 -module(mms_s3).
 
--export([config/0, bucket/1, start/0, get/2, upload/2, secret/0]).
+-export([config/0, bucket/1, start/0, get/2, get_object/1, upload/2, secret/0]).
 
 -include_lib("erlcloud/include/erlcloud_aws.hrl").
 -include("mms.hrl").
@@ -43,6 +43,17 @@ get(#mms_file{uid = Uid, private = Private}, Expire) ->
         {_, H, P} -> H ++ P
     catch
         _:_ -> error
+    end.
+
+-spec get_object(#mms_file{}) -> binary() | error.
+get_object(#mms_file{uid = Uid, private = Private}) ->
+    try erlcloud_s3:get_object(bucket(Private), binary_to_list(Uid), ?S3_CONFIG) of
+        R ->
+            proplists:get_value(content, R, error)
+    catch
+        _:_Reason ->
+%%          ?DEBUG(_Reason),
+            error
     end.
 
 -spec upload(#mms_file{}, binary()) -> ok | error.
