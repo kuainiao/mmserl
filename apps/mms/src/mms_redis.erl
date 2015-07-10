@@ -6,7 +6,7 @@
 
 -module(mms_redis).
 
--export([start/0, get/1, insert/2, remove/1]).
+-export([start/0, get/1, insert/2, remove/1, all/0]).
 
 start() ->
     {ok, Client} = eredis:start_link(),
@@ -32,10 +32,20 @@ insert(Key, Val) ->
             {error, Error}
     end.
 
+-spec remove(binary()) -> ok | {error, term()}.
 remove(Key) ->
     case eredis:q(redis_client, ["DEL", Key]) of
         {ok, <<"OK">>} ->
             ok;
         Error ->
             {error, Error}
+    end.
+
+-spec all() -> {ok, [binary()]} | {error, term()}.
+all() ->
+    case eredis:q(redis_client, ["KEYS", "upload:*"]) of
+        {ok, R} ->
+            {ok, R};
+        Reason ->
+            {error, Reason}
     end.

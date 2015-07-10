@@ -5,7 +5,7 @@
 
 -module(mms_s3).
 
--export([config/0, bucket/1, start/0, get/2, get_object/1, upload/2, secret/0]).
+-export([config/0, bucket/1, start/0, get/2, get_object/1, upload/2, secret/0, remove/1]).
 
 -include_lib("erlcloud/include/erlcloud_aws.hrl").
 -include("mms.hrl").
@@ -65,3 +65,11 @@ upload(#mms_file{uid = Uid, private = Private}, Content) ->
             error
     end.
 
+-spec remove(#mms_file{}) -> ok | error.
+remove(#mms_file{uid = Uid, private = Private}) ->
+    try erlcloud_s3:delete_object(bucket(Private), binary_to_list(Uid), ?S3_CONFIG) of
+        _ -> ok
+    catch
+        _:_Reason ->
+            error
+    end.
