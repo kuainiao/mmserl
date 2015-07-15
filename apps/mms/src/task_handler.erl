@@ -3,25 +3,34 @@
 %%%
 %%%-------------------------------------------------------------------
 
--module(task).
+-module(task_handler).
 
-%% API
--export([run/0]).
+-export([init/2]).
+
+-include("mms.hrl").
+
 -define(Expire, stamp() - 30 * 24 * 60 * 60).
+
+init(Req, Opts) ->
+    run(),
+    mms_response:ok(Req, Opts, <<"done.">>).
+
 run() ->
     case mms_redis:all() of
         {ok, R} when is_list(R) ->
             lists:foreach(fun(X) ->
                 case mms_redis:get(X) of
-                    {ok, Val} ->
+                    {ok, <<P:1/binary, $:, Val/binary>>} ->
                         case is_expired(Val) of
                             error ->
                                 io:format("bad value: ~p:~p~n", [X, Val]);
                             true ->
-                                remove(X);
+                                remove(X, P);
                             _ ->
                                 ok
-                        end
+                        end;
+                    _ ->
+                        ok
                 end
             end, R)
     end,
@@ -37,8 +46,8 @@ is_expired(Val) ->
             false
     end.
 
-remove(<<"upload:", Uid>> = Key) ->
-    case mms_s3:remove(Uid) of
+remove(<<"upload:", Uid/binary>> = Key, Private) ->
+    case mms_s3:remove(#mms_file{uid = Uid, private = Private}) of
         ok ->
             mms_redis:remove(Key),
             io:format("removed: ~p~n", [Uid]);
@@ -46,11 +55,9 @@ remove(<<"upload:", Uid>> = Key) ->
             io:format("failed: ~p~n", [Uid])
     end;
 
-remove(_) ->
+remove(_, _) ->
     ok.
 
 stamp() ->
     {M, S, _} = erlang:now(),
-    M * 1000 + S.
-
-
+    M * 1000000 + S.
