@@ -3,4 +3,13 @@ notifications:
   email: false
 otp_release:
   - 17.4
-  - 17.3
+after-success:
+  - tools/travis_upload_release.sh
+env:
+  global:
+    - TARBALL_NAME=${TRAVIS_BUILD_NUMBER}-${TRAVIS_PULL_REQUEST/false/$TRAVIS_BRANCH}-${TRAVIS_COMMIT:0:6}.tar.gz
+  matrix:
+    - SPEC=embedded
+    - SPEC=spec1
+    - SPEC=spec2
+    - SPEC=spec3
