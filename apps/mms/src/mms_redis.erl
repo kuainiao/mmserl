@@ -8,8 +8,10 @@
 
 -export([start/0, get/1, insert/2, remove/1, all/0]).
 
+-include("mms.hrl").
+
 start() ->
-    {ok, Client} = eredis:start_link(),
+    {ok, Client} = eredis:start_link(?ENV(redis_host), ?ENV(redis_port)),
     register(redis_client, Client).
 
 -spec get(binary()) -> binary() | {error, _}.
