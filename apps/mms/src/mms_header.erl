@@ -6,7 +6,7 @@
 -module(mms_header).
 
 %% API
--export([verify/1, parse/1, parse_body/1, action/2]).
+-export([verify/1, parse/1, parse_body/1]).
 
 -include("mms.hrl").
 
@@ -113,20 +113,6 @@ md5(Text) ->
 generate_timestamp() ->
     {M, S, _} = erlang:now(),
     M * 1000000 + S.
-
-action(#mms_range{start_bytes = S, end_bytes = E}, FileSize) ->
-    case FileSize of
-        E ->
-            case S of
-                0 -> upload;
-                _ -> append_upload
-            end;
-        _ ->
-            case S of
-                0 -> new_file;
-                _ -> append_file
-            end
-    end.
 
 %% special range parse, like "bytes=0-600"
 range(<<"bytes=", Rest/binary>>) ->

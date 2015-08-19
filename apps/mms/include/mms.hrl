@@ -19,7 +19,8 @@
 
 -record(mms_range, {
     start_bytes :: integer(),
-    end_bytes :: integer()
+    end_bytes :: integer(),
+    total_bytes :: integer()
 }).
 
 -record(mms_headers, {
