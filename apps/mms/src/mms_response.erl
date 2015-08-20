@@ -4,16 +4,16 @@
 %%%-------------------------------------------------------------------
 -module(mms_response).
 
--export([bad_request/3, ok/3]).
+-export([response/5, bad_request/3, ok/3]).
+
+response(Req, Opts, Body, Code, ContentType) ->
+    Req2 = cowboy_req:reply(Code, [
+        {<<"content-type">>, ContentType}
+    ], Body, Req),
+    {ok, Req2, Opts}.
 
 bad_request(Req, Opts, Reason) ->
-    Req2 = cowboy_req:reply(400, [
-        {<<"content-type">>, <<"text/plain">>}
-    ], Reason, Req),
-    {ok, Req2, Opts}.
+    response(Req, Opts, Reason, 400, <<"text/plain">>).
 
-ok(Req, Opts, Text) ->
-    Req2 = cowboy_req:reply(200, [
-        {<<"content-type">>, <<"text/plain">>}
-    ], Text, Req),
-    {ok, Req2, Opts}.
+ok(Req, Opts, Content) ->
+    response(Req, Opts, Content, 200, <<"text/plain">>).

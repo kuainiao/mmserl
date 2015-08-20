@@ -98,13 +98,16 @@ verify(#mms_headers{owner = Owner, token = Token, uid = Uid, expiration = Expira
                 {ok, _} ->
                     E = integer_to_binary(Expiration),
                     S = list_to_binary(?MMS_SECRET),
-                    Token =:= iolist_to_binary(md5(<<Owner/binary, Uid/binary, E/binary, S/binary, Private/binary>>));
+                    Token =:= sign(Owner, Uid, E, S, Private);
                 _ ->
                     false
             end;
         false ->
             false
     end.
+
+sign(Owner, Uid, Expir, Secret, Private) ->
+    iolist_to_binary(md5(<<Owner/binary, Uid/binary, Expir/binary, Secret/binary, Private/binary>>)).
 
 -spec md5(string() | binary()) -> string().
 md5(Text) ->

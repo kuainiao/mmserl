@@ -26,7 +26,12 @@ init(Req, Opts) ->
         } = Headers ->
             case mms_header:verify(Headers) of
                 false ->
-                    mms_response:bad_request(Req, Opts, <<"bad request">>);
+                    make_response(Req, Opts, #mms_response{
+                        uid = Uid,
+                        status = 0,
+                        ranges = [],
+                        code = 10001
+                    });
                 _ ->
                     {ok, Content, Req3} = mms_header:parse_body(Req),
                     File = #mms_file{uid = Uid, filename = FileName, owner = Owner, private = Private},
@@ -39,12 +44,28 @@ init(Req, Opts) ->
                                     mms_redis:remove(<<"upload_temp:", Uid/binary>>),
                                     case mms_mysql:save(File) of
                                         {error, _} ->
-                                            mms_response:bad_request(Req3, Opts, <<"upload error">>);
+                                            make_response(Req3, Opts, #mms_response{
+                                                uid = Uid,
+                                                status = 0,
+                                                ranges = Ranges,
+                                                code = 10002
+                                            });
                                         _ ->
-                                            mms_response:ok(Req3, Opts, Uid)
+                                            clear_tempfile(Uid, Private, Ranges),
+                                            make_response(Req3, Opts, #mms_response{
+                                                uid = Uid,
+                                                status = 2,
+                                                ranges = Ranges,
+                                                code = 10000
+                                            })
                                     end;
                                 error ->
-                                    mms_response:bad_request(Req3, Opts, <<"upload error">>)
+                                    make_response(Req3, Opts, #mms_response{
+                                        uid = Uid,
+                                        status = 0,
+                                        ranges = Ranges,
+                                        code = 10003
+                                    })
                             end;
                         {append, Ranges} ->
                             SBin = integer_to_binary(Range#mms_range.start_bytes),
@@ -54,10 +75,27 @@ init(Req, Opts) ->
                                 , private = Private}, Content) of
                                 ok ->
                                     mms_redis:insert(<<"upload_temp:", Uid/binary>>, ranges_to_str(Ranges)),
-                                    mms_response:ok(Req3, Opts, Uid);
+                                    make_response(Req3, Opts, #mms_response{
+                                        uid = Uid,
+                                        status = 1,
+                                        ranges = Ranges,
+                                        code = 10000
+                                    });
                                 error ->
-                                    mms_response:bad_request(Req3, Opts, <<"upload error">>)
-                            end
+                                    make_response(Req3, Opts, #mms_response{
+                                        uid = Uid,
+                                        status = 0,
+                                        ranges = Ranges,
+                                        code = 10004
+                                    })
+                            end;
+                        {error, Ranges} ->
+                            make_response(Req3, Opts, #mms_response{
+                                uid = Uid,
+                                status = 0,
+                                ranges = Ranges,
+                                code = 10005
+                            })
                     end
             end
     end.
@@ -74,28 +112,33 @@ get_range(Uid, Range, FileSize) ->
     Ranges = case mms_redis:get(Key) of
                  {ok, R} ->
                      RangeStr = [binary:split(X, <<"-">>) || X <- binary:split(R, <<",">>)],
-                     [Range | [#mms_range{start_bytes = binary_to_integer(S), end_bytes = binary_to_integer(E)} ||
-                         [S, E] <- RangeStr]];
+                     [#mms_range{start_bytes = binary_to_integer(S), end_bytes = binary_to_integer(E)} ||
+                         [S, E] <- RangeStr];
                  {error, _} ->
-                     [Range]
+                     []
              end,
-    case check_done(Ranges, FileSize) of
+    case lists:member(Range, Ranges) of
         true ->
-            {complete, Ranges};
+            {error, Ranges};
         false ->
-            case lists:member(Range, Ranges) of
+            All = [Range | Ranges],
+            case check_done(All, FileSize) of
                 true ->
-                    {error, duplicated};
+                    {complete, All};
                 false ->
-                    {append, Ranges}
+                    {append, All}
             end
     end.
 
 -spec ranges_to_str([#mms_range{}]) -> binary().
 ranges_to_str(Ranges) ->
-    RangeStr = [integer_to_list(S) ++ "-" ++ integer_to_list(E) ||
-        #mms_range{start_bytes = S, end_bytes = E} <- Ranges],
-    list_to_binary(string:join(RangeStr, ",")).
+    RangeStr = [range_to_str(R) || R <- Ranges],
+    mms_lib:binary_join(RangeStr, <<",">>).
+
+range_to_str(Range) ->
+    SBin = integer_to_binary(Range#mms_range.start_bytes),
+    EBin = integer_to_binary(Range#mms_range.end_bytes),
+    <<SBin/binary, "-", EBin/binary>>.
 
 check_done(Ranges, FileSize) ->
     lists:sum([E - S + 1 || #mms_range{start_bytes = S, end_bytes = E} <- Ranges]) =:= FileSize.
@@ -122,3 +165,26 @@ get_complete_content(Ranges, Content, Range, Uid, Private) ->
         end
     end, SRanges),
     mms_lib:binary_join(Objects, <<>>).
+
+clear_tempfile(Uid, Private, Ranges) ->
+    lists:foreach(fun(X) ->
+        SBin = integer_to_binary(X#mms_range.start_bytes),
+        EBin = integer_to_binary(X#mms_range.end_bytes),
+        Id = <<Uid/binary, "-", SBin/binary, "-", EBin/binary>>,
+        mms_s3:remove(#mms_file{uid = Id, private = Private})
+    end, Ranges).
+
+make_response(Req, Opts, Response) ->
+    Resp = response_to_json(Response),
+    Code = case Response#mms_response.status of
+               1 -> 200;
+               2 -> 200;
+               _ -> 400
+           end,
+    mms_response:response(Req, Opts, Resp, Code, <<"application/json">>).
+
+response_to_json(#mms_response{uid = Uid, status = Status, ranges = Ranges, code = Err}) ->
+    S = integer_to_binary(Status),
+    R = ranges_to_str(Ranges),
+    E = integer_to_binary(Err),
+    <<"{\"uid\":\"", Uid/binary, "\",\"status\":", S/binary, ",\"ranges\":\"", R/binary, "\",\"code\":", E/binary, "}">>.

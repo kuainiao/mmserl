@@ -42,5 +42,10 @@
     created_at :: integer()
 }).
 
-
+-record(mms_response, {
+    uid :: binary(),
+    status :: integer(),
+    ranges :: [#mms_range{}],
+    code :: integer()
+}).
 
