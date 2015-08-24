@@ -47,14 +47,16 @@ is_expired(Val) ->
     end.
 
 remove(<<"upload:", Uid/binary>> = Key, Private) ->
-    case mms_s3:remove(#mms_file{uid = Uid, private = Private}) of
-        ok ->
+    case mms_redis:get(<<"upload_temp:", Uid/binary>>) of
+        {ok, Str} ->
+            Ranges = mms_lib:str_to_ranges(Str),
+            mms_lib:clear_tempfile(Uid, Private, Ranges),
             mms_redis:remove(Key),
+            mms_redis:remove(<<"upload_temp:", Uid/binary>>),
             io:format("removed: ~p~n", [Uid]);
         _ ->
-            io:format("failed: ~p~n", [Uid])
+            mms_redis:remove(Key)
     end;
-
 remove(_, _) ->
     ok.
 
