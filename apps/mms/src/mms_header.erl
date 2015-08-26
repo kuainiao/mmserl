@@ -91,9 +91,10 @@ parse_body(Req) ->
 %% ==================================
 
 -spec verify(#mms_headers{}) -> true | false.
-verify(#mms_headers{owner = Owner, token = Token, uid = Uid, expiration = Expiration, private = Private}) ->
-    case generate_timestamp() =< Expiration of
-        true ->
+verify(#mms_headers{owner = Owner, token = Token, uid = Uid, expiration = Expiration, private = Private,
+    range = Range, filesize = FileSize}) ->
+    case {generate_timestamp() =< Expiration, Range#mms_range.end_bytes + 1 =< FileSize} of
+        {true, true} ->
             case mms_redis:get(<<"upload:", Uid/binary>>) of
                 {ok, _} ->
                     E = integer_to_binary(Expiration),
@@ -102,7 +103,7 @@ verify(#mms_headers{owner = Owner, token = Token, uid = Uid, expiration = Expira
                 _ ->
                     false
             end;
-        false ->
+        _ ->
             false
     end.
 
