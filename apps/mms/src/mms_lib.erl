@@ -51,8 +51,8 @@ binary_join(List, Sep) ->
 
 -spec get_range(binary(), #mms_range{}, integer()) -> {complete, [#mms_range{}]} |
 {append, [#mms_range{}]} | {error, term()}.
-get_range(Uid, Range, FileSize) ->
-    Key = <<"upload_temp:", Uid/binary>>,
+get_range(FileId, Range, FileSize) ->
+    Key = <<"upload_temp:", FileId/binary>>,
     Ranges = case mms_redis:get(Key) of
                  {ok, R} ->
                      str_to_ranges(R);
@@ -91,7 +91,7 @@ range_to_str(Range) ->
 check_done(Ranges, FileSize) ->
     lists:sum([E - S + 1 || #mms_range{start_bytes = S, end_bytes = E} <- Ranges]) =:= FileSize.
 
-get_complete_content(Ranges, Content, Range, Uid, Private) ->
+get_complete_content(Ranges, Content, Range, FileId, Type) ->
     SRanges = lists:sort(fun(X, Y) ->
         X#mms_range.start_bytes =< Y#mms_range.start_bytes
     end, Ranges),
@@ -102,8 +102,8 @@ get_complete_content(Ranges, Content, Range, Uid, Private) ->
                 SBin = integer_to_binary(X#mms_range.start_bytes),
                 EBin = integer_to_binary(X#mms_range.end_bytes),
                 case mms_s3:get_object(#mms_file{
-                    uid = <<Uid/binary, "-", SBin/binary, "-", EBin/binary>>,
-                    private = Private
+                    uid = <<FileId/binary, "-", SBin/binary, "-", EBin/binary>>,
+                    type = Type
                 }) of
                     error ->
                         undefined;
@@ -114,10 +114,10 @@ get_complete_content(Ranges, Content, Range, Uid, Private) ->
     end, SRanges),
     mms_lib:binary_join(Objects, <<>>).
 
-clear_tempfile(Uid, Private, Ranges) ->
+clear_tempfile(FileId, Type, Ranges) ->
     lists:foreach(fun(X) ->
         SBin = integer_to_binary(X#mms_range.start_bytes),
         EBin = integer_to_binary(X#mms_range.end_bytes),
-        Id = <<Uid/binary, "-", SBin/binary, "-", EBin/binary>>,
-        mms_s3:remove(#mms_file{uid = Id, private = Private})
+        Id = <<FileId/binary, "-", SBin/binary, "-", EBin/binary>>,
+        mms_s3:remove(#mms_file{uid = Id, type = Type})
     end, Ranges).

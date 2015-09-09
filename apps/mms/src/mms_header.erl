@@ -16,20 +16,20 @@
 %% ==================================
 
 parse(Req) ->
-    Uid = parse_uid(Req),
+    FileId = parse_fileid(Req),
     FileSize = parse_filesize(Req),
     Range = parse_range(Req),
     Owner = parse_owner(Req),
     Token = parse_token(Req),
     Expiration = parse_expiration(Req),
-    case lists:member(undefined, [Uid, FileSize, Range, Owner, Token, Expiration]) of
+    case lists:member(undefined, [FileId, FileSize, Range, Owner, Token, Expiration]) of
         true -> false;
         _ ->
             #mms_headers{
-                uid = Uid,
+                fileid = FileId,
                 filename = parse_filename(Req),
                 filesize = FileSize,
-                private = parse_private(Req),
+                type = parse_type(Req),
                 range = Range,
                 owner = Owner,
                 token = Token,
@@ -37,8 +37,8 @@ parse(Req) ->
             }
     end.
 
-parse_uid(Req) ->
-    cowboy_req:header(<<"uid">>, Req, undefined).
+parse_fileid(Req) ->
+    cowboy_req:header(<<"fileid">>, Req, undefined).
 
 parse_filename(Req) ->
     cowboy_req:header(<<"filename">>, Req, <<"">>).
@@ -50,10 +50,11 @@ parse_filesize(Req) ->
         _:_ -> undefined
     end.
 
-parse_private(Req) ->
-    case cowboy_req:header(<<"private">>, Req, ?PRIVATE) of
-        ?PUBLIC -> ?PUBLIC;
-        _ -> ?PRIVATE
+parse_type(Req) ->
+    case cowboy_req:header(<<"type">>, Req, ?MESSAGE) of
+        ?AVATAR -> ?AVATAR;
+        ?PROJECT -> ?PROJECT;
+        _ -> ?MESSAGE
     end.
 
 parse_owner(Req) ->
@@ -91,7 +92,7 @@ parse_body(Req) ->
 %% ==================================
 
 -spec verify(#mms_headers{}) -> true | false.
-verify(#mms_headers{owner = Owner, token = Token, uid = Uid, expiration = Expiration, private = Private,
+verify(#mms_headers{owner = Owner, token = Token, fileid = Uid, expiration = Expiration, type = Type,
     range = Range, filesize = FileSize}) ->
     case {generate_timestamp() =< Expiration, Range#mms_range.end_bytes + 1 =< FileSize} of
         {true, true} ->
@@ -99,7 +100,7 @@ verify(#mms_headers{owner = Owner, token = Token, uid = Uid, expiration = Expira
                 {ok, _} ->
                     E = integer_to_binary(Expiration),
                     S = list_to_binary(?MMS_SECRET),
-                    Token =:= sign(Owner, Uid, E, S, Private);
+                    Token =:= sign(Owner, Uid, E, S, Type);
                 _ ->
                     false
             end;
@@ -107,8 +108,8 @@ verify(#mms_headers{owner = Owner, token = Token, uid = Uid, expiration = Expira
             false
     end.
 
-sign(Owner, Uid, Expir, Secret, Private) ->
-    iolist_to_binary(md5(<<Owner/binary, Uid/binary, Expir/binary, Secret/binary, Private/binary>>)).
+sign(Owner, Uid, Expir, Secret, Type) ->
+    iolist_to_binary(md5(<<Owner/binary, Uid/binary, Expir/binary, Secret/binary, Type/binary>>)).
 
 -spec md5(string() | binary()) -> string().
 md5(Text) ->

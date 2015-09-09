@@ -3,9 +3,10 @@
 %%%
 %%%-------------------------------------------------------------------
 
-%% is private
--define(PUBLIC, <<"0">>).
--define(PRIVATE, <<"1">>).
+%% file type
+-define(AVATAR, <<"1">>).
+-define(MESSAGE, <<"2">>).
+-define(PROJECT, <<"3">>).
 
 -define(ENV(Key), mms_lib:get_env(Key)).
 -define(S3_CONFIG, mms_s3:config()).
@@ -24,10 +25,10 @@
 }).
 
 -record(mms_headers, {
-    uid :: binary(),
+    fileid :: binary(),
     filename :: binary(),
     filesize :: integer(),
-    private :: binary(),
+    type :: binary(),
     range :: #mms_range{},
     owner :: binary(),
     token :: binary(),
@@ -35,16 +36,16 @@
 }).
 
 -record(mms_file, {
+    id::binary(),
     filename :: binary(),
     owner :: binary(),
     uid :: binary(),
-    private :: binary(),
+    type :: binary(),
     created_at :: integer()
 }).
 
 -record(mms_response, {
-    uid :: binary(),
-    status :: integer(),
+    fileid :: binary(),
     ranges :: [#mms_range{}],
     code :: integer()
 }).

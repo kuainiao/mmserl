@@ -34,42 +34,24 @@ log(Module, Line, Level, FormatFun) ->
 %% ===========================
 
 -spec get(binary()) -> #mms_file{} | {error, _}.
-get(Uid) ->
-    case mysql:fetch(mms_conn, <<"select filename,owner,private,UNIX_timestamp(created_at) from mms_file where uid= '",
-    Uid/binary, "';">>) of
-        {selected, {mysql_result, [], [], [], []}} ->
+get(FileId) ->
+    case mysql:fetch(mms_conn, <<"select uid,filename,owner,private,UNIX_timestamp(created_at) from mms_file where id= '",
+    FileId/binary, "';">>) of
+        {selected, {mysql_result, [], [], [], [], []}} ->
             {error, not_exists};
-        {selected, {mysql_result, FileName, Owner, Private, CreatedAt}} ->
-            #mms_file{uid = Uid, filename = FileName, owner = Owner,
-                private = case Private of
-                              <<0>> -> ?PUBLIC;
-                              _ -> ?PRIVATE
-                          end, created_at = CreatedAt};
+        {selected, {mysql_result, Uid, FileName, Owner, Type, CreatedAt}} ->
+            #mms_file{id = FileId, uid = Uid, filename = FileName, owner = Owner,
+                type = Type, created_at = CreatedAt};
         Reason ->
             {error, Reason}
     end.
 
--spec save(#mms_file{}) -> binary()| {error, _}.
-save(#mms_file{filename = FileName, uid = undefined, private = Private, owner = Owner}) ->
-    R2 = mysql:transaction(
-        mms_conn,
-        fun() ->
-            {data, T1} = mysql:fetch(<<"select uuid()">>),
-            [[Uid]] = mysql:get_result_rows(T1),
-            mysql:fetch(<<"insert into mms_file(uid,filename,owner,private,created_at) values('", Uid/binary, "','",
-            FileName/binary, "', '", Owner/binary, "',", Private/binary, ", now());">>),
-            Uid
-        end),
-    case R2 of
-        {atomic, Uid} -> Uid;
-        Reason -> {error, Reason}
-    end;
-save(#mms_file{filename = FileName, uid = Uid, private = Private, owner = Owner}) ->
-    Query = <<"insert into mms_file(uid,filename,owner,private,created_at) values('", Uid/binary, "','",
-    FileName/binary, "', '", Owner/binary, "',", Private/binary, ", now());">>,
+save(#mms_file{id = FileId, filename = FileName, uid = Uid, type = Type, owner = Owner}) ->
+    Query = <<"insert into mms_file(id,uid,filename,owner,type,created_at) values('", FileId/binary, "','",
+    Uid/binary, "','", FileName/binary, "', '", Owner/binary, "',", Type/binary, ", now());">>,
     case mysql:fetch(mms_conn, Query) of
         {updated, {mysql_result, [], [], 1, 0, [], 0, []}} ->
-            Uid;
+            FileId;
         Reason ->
             {error, Reason}
     end.

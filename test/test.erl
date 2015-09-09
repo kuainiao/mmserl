@@ -8,7 +8,7 @@
 -define(DESC, "test.txt").
 -define(UID, "ca6156c6ddb04b74a4d7ae3454dfd49f").
 -define(EXPIRATION, "1400142400").
--define(PRIVATE, "1").
+-define(TYPE, "2").
 
 upload() ->
     {ok, BinContent} = file:read_file(?FILE_NAME),
@@ -20,9 +20,9 @@ upload() ->
     ssl:start(),
 
     URL = "http://" ++ ?SERVER ++ ":8080/upload",
-    Header = [{"uid", ?UID},
+    Header = [{"fileid", ?UID},
         {"filesize", Size},
-        {"private", ?PRIVATE},
+        {"type", ?TYPE},
         {"range", Range},
         {"filename", ?FILE_NAME},
         {"owner", ?OWNER},

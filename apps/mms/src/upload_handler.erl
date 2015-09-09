@@ -19,82 +19,77 @@ init(Req, Opts) ->
         #mms_headers{
             filename = FileName,
             filesize = FileSize,
-            uid = Uid,
+            fileid = FileId,
             owner = Owner,
             range = Range,
-            private = Private
+            type = Type
         } = Headers ->
             case mms_header:verify(Headers) of
                 false ->
                     make_response(Req, Opts, #mms_response{
-                        uid = Uid,
-                        status = 0,
+                        fileid = FileId,
                         ranges = [],
-                        code = 10001
+                        code = 10011
                     });
                 _ ->
                     {ok, Content, Req3} = mms_header:parse_body(Req),
-                    File = #mms_file{uid = Uid, filename = FileName, owner = Owner, private = Private},
-                    case mms_lib:get_range(Uid, Range, FileSize) of
+                    File = #mms_file{id = FileId, filename = FileName, owner = Owner, type = Type},
+                    case mms_lib:get_range(FileId, Range, FileSize) of
                         {complete, Ranges} ->
-                            CompleteContent = mms_lib:get_complete_content(Ranges, Content, Range, Uid, Private),
-                            case mms_s3:upload(File, CompleteContent) of
+                            Uid = uuid:generate(),
+                            CompleteContent = mms_lib:get_complete_content(Ranges, Content, Range, FileId, Type),
+                            NewFile = File#mms_file{uid = Uid},
+                            case mms_s3:upload(NewFile, CompleteContent) of
                                 ok ->
-                                    mms_redis:remove(<<"upload:", Uid/binary>>),
-                                    mms_redis:remove(<<"upload_temp:", Uid/binary>>),
-                                    case mms_mysql:save(File) of
+                                    mms_redis:remove(<<"upload:", FileId/binary>>),
+                                    mms_redis:remove(<<"upload_temp:", FileId/binary>>),
+                                    case mms_mysql:save(NewFile) of
                                         {error, _} ->
                                             make_response(Req3, Opts, #mms_response{
-                                                uid = Uid,
-                                                status = 0,
+                                                fileid = FileId,
                                                 ranges = Ranges,
-                                                code = 10002
+                                                code = 10012
                                             });
                                         _ ->
-                                            mms_lib:clear_tempfile(Uid, Private, Ranges),
+                                            mms_lib:clear_tempfile(FileId, Type, Ranges),
                                             make_response(Req3, Opts, #mms_response{
-                                                uid = Uid,
-                                                status = 2,
+                                                fileid = FileId,
                                                 ranges = Ranges,
-                                                code = 10000
+                                                code = 10001
                                             })
                                     end;
                                 error ->
                                     make_response(Req3, Opts, #mms_response{
-                                        uid = Uid,
-                                        status = 0,
+                                        fileid = FileId,
                                         ranges = Ranges,
-                                        code = 10003
+                                        code = 10013
                                     })
                             end;
                         {append, Ranges} ->
                             SBin = integer_to_binary(Range#mms_range.start_bytes),
                             EBin = integer_to_binary(Range#mms_range.end_bytes),
                             case mms_s3:upload(#mms_file{
-                                uid = <<Uid/binary, "-", SBin/binary, "-", EBin/binary>>
-                                , private = Private}, Content) of
+                                uid = <<FileId/binary, "-", SBin/binary, "-", EBin/binary>>
+                                , type = Type}, Content) of
                                 ok ->
-                                    mms_redis:insert(<<"upload_temp:", Uid/binary>>, mms_lib:ranges_to_str(Ranges)),
+                                    mms_redis:insert(<<"upload_temp:", FileId/binary>>, mms_lib:ranges_to_str(Ranges)),
                                     make_response(Req3, Opts, #mms_response{
-                                        uid = Uid,
-                                        status = 1,
+                                        fileid = FileId,
                                         ranges = Ranges,
-                                        code = 10000
+                                        code = 10002
                                     });
                                 error ->
                                     make_response(Req3, Opts, #mms_response{
-                                        uid = Uid,
-                                        status = 0,
+                                        fileid = FileId,
                                         ranges = Ranges,
-                                        code = 10004
+                                        code = 10013
                                     })
                             end;
                         {error, Ranges} ->
                             make_response(Req3, Opts, #mms_response{
-                                uid = Uid,
-                                status = 0,
+                                fileid = FileId,
                                 ranges = Ranges,
-                                code = 10005
+                                code = 10014
                             })
                     end
             end
@@ -107,15 +102,13 @@ init(Req, Opts) ->
 
 make_response(Req, Opts, Response) ->
     Resp = response_to_json(Response),
-    Code = case Response#mms_response.status of
-               1 -> 200;
-               2 -> 200;
+    Code = case Response#mms_response.code < 10010 of
+               true -> 200;
                _ -> 400
            end,
     mms_response:response(Req, Opts, Resp, Code, <<"application/json">>).
 
-response_to_json(#mms_response{uid = Uid, status = Status, ranges = Ranges, code = Err}) ->
-    S = integer_to_binary(Status),
+response_to_json(#mms_response{fileid = FileId, ranges = Ranges, code = Err}) ->
     R = mms_lib:ranges_to_str(Ranges),
     E = integer_to_binary(Err),
-    <<"{\"uid\":\"", Uid/binary, "\",\"status\":", S/binary, ",\"ranges\":\"", R/binary, "\",\"code\":", E/binary, "}">>.
+    <<"{\"fileid\":\"", FileId/binary, "\",\"ranges\":\"", R/binary, "\",\"code\":", E/binary, "}">>.
