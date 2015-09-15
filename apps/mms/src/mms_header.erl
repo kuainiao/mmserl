@@ -84,8 +84,15 @@ parse_expiration(Req) ->
 
 parse_body(Req) ->
     {ok, _, Req2} = cowboy_req:part(Req),
-    cowboy_req:part_body(Req2).
+    stream_uploaded_file(Req2, <<>>).
 
+stream_uploaded_file(Req, Binary) ->
+    case cowboy_req:part_body(Req, [{read_timeout, 50000}]) of
+        {ok, FullBinary, Req2} ->
+            {ok, FullBinary, Req2};
+        {more, PartialBinary, Req2} ->
+            stream_uploaded_file(Req2, <<Binary/binary, PartialBinary/binary>>)
+    end.
 
 %% ==================================
 %% verify

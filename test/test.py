@@ -5,16 +5,17 @@ import os
 import requests
 
 ip = '127.0.0.1'
+filename = 'linux.zip'
 
 config = {
-    'fileid': '619a255d88d94431b5b17e32d36fd564',
-    'range': 'bytes=0-%s' % (os.path.getsize('test.dat') - 1),
-    'token': '344118a4d4893153b04618e67918c239',
-    'type': '2',
-    'filesize': os.path.getsize('test.dat'),
-    'filename': 'test.dat',
+    'fileid': '4c1e07084ae1464d8eeb0786e82328e0',
+    'range': 'bytes=0-%s' % (os.path.getsize(filename) - 1),
+    'token': '132d909d62d476b176cd5558e1c93a',
+    'type': '1',
+    'filesize': os.path.getsize(filename),
+    'filename': filename,
     'owner': '4d3b9a253dfb4bf4ac316e08f76b08ff@localhost',
-    'expiration': 1441788868
+    'expiration': 1442316380
 }
 
 

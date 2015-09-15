@@ -52,7 +52,7 @@ get_object(#mms_file{uid = Uid, type = Type}) ->
             proplists:get_value(content, R, error)
     catch
         _:_Reason ->
-%%          ?DEBUG(_Reason),
+            ?DEBUG(_Reason),
             error
     end.
 
@@ -62,6 +62,7 @@ upload(#mms_file{uid = Uid, type = Type}, Content) ->
         _ -> ok
     catch
         _:_Reason ->
+            ?DEBUG(_Reason),
             error
     end.
 
