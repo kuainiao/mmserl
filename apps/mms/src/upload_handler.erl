@@ -22,8 +22,10 @@ init(Req, Opts) ->
             fileid = FileId,
             owner = Owner,
             range = Range,
-            type = Type
+            type = Type,
+            mimetype = ContentType
         } = Headers ->
+            ?DEBUG(ContentType),
             case mms_header:verify(Headers) of
                 false ->
                     make_response(Req, Opts, #mms_response{
@@ -39,7 +41,7 @@ init(Req, Opts) ->
                             Uid = uuid:generate(),
                             CompleteContent = mms_lib:get_complete_content(Ranges, Content, Range, FileId, Type),
                             NewFile = File#mms_file{uid = Uid},
-                            case mms_s3:upload(NewFile, CompleteContent) of
+                            case mms_s3:upload(NewFile, CompleteContent, ContentType) of
                                 ok ->
                                     mms_redis:remove(<<"upload:", FileId/binary>>),
                                     mms_redis:remove(<<"upload_temp:", FileId/binary>>),
@@ -70,7 +72,7 @@ init(Req, Opts) ->
                             EBin = integer_to_binary(Range#mms_range.end_bytes),
                             case mms_s3:upload(#mms_file{
                                 uid = <<FileId/binary, "-", SBin/binary, "-", EBin/binary>>
-                                , type = Type}, Content) of
+                                , type = Type}, Content, ContentType) of
                                 ok ->
                                     mms_redis:insert(<<"upload_temp:", FileId/binary>>, mms_lib:ranges_to_str(Ranges)),
                                     make_response(Req3, Opts, #mms_response{

@@ -5,7 +5,7 @@
 
 -module(mms_s3).
 
--export([config/0, bucket/1, start/0, get/2, get_object/1, upload/2, secret/0, remove/1]).
+-export([config/0, bucket/1, start/0, get/2, get_object/1, upload/3, secret/0, remove/1]).
 
 -include_lib("erlcloud/include/erlcloud_aws.hrl").
 -include("mms.hrl").
@@ -56,9 +56,10 @@ get_object(#mms_file{uid = Uid, type = Type}) ->
             error
     end.
 
--spec upload(#mms_file{}, binary()) -> ok | error.
-upload(#mms_file{uid = Uid, type = Type}, Content) ->
-    try erlcloud_s3:put_object(bucket(Type), binary_to_list(Uid), Content, ?S3_CONFIG) of
+-spec upload(#mms_file{}, binary(), binary()) -> ok | error.
+upload(#mms_file{uid = Uid, type = Type}, Content, ContentType) ->
+    try erlcloud_s3:put_object(bucket(Type), binary_to_list(Uid), Content, [],
+        [{"content-type", binary_to_list(ContentType)}], ?S3_CONFIG) of
         _ -> ok
     catch
         _:_Reason ->

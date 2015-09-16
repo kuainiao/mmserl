@@ -32,11 +32,12 @@
     range :: #mms_range{},
     owner :: binary(),
     token :: binary(),
-    expiration :: integer()
+    expiration :: integer(),
+    mimetype ::binary()
 }).
 
 -record(mms_file, {
-    id::binary(),
+    id :: binary(),
     filename :: binary(),
     owner :: binary(),
     uid :: binary(),

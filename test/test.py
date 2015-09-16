@@ -5,17 +5,18 @@ import os
 import requests
 
 ip = '127.0.0.1'
-filename = 'linux.zip'
+filename = 'abc.jpg'
 
 config = {
-    'fileid': '4c1e07084ae1464d8eeb0786e82328e0',
+    'fileid': 'e8db188db96f4f3ba5f9b6e09bbecbfc',
     'range': 'bytes=0-%s' % (os.path.getsize(filename) - 1),
-    'token': '132d909d62d476b176cd5558e1c93a',
+    'token': 'ac88f5dca0d9d3055a370c99374413f',
     'type': '1',
     'filesize': os.path.getsize(filename),
     'filename': filename,
     'owner': '4d3b9a253dfb4bf4ac316e08f76b08ff@localhost',
-    'expiration': 1442316380
+    'expiration': 1442393886,
+    'mimeType': 'image/jpeg'
 }
 
 

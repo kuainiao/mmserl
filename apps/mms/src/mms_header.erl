@@ -33,7 +33,8 @@ parse(Req) ->
                 range = Range,
                 owner = Owner,
                 token = Token,
-                expiration = Expiration
+                expiration = Expiration,
+                mimetype = parse_content_type(Req)
             }
     end.
 
@@ -81,6 +82,9 @@ parse_expiration(Req) ->
     catch
         _:_ -> undefined
     end.
+
+parse_content_type(Req) ->
+    cowboy_req:header(<<"mimetype">>, Req, <<"application/octet-stream">>).
 
 parse_body(Req) ->
     {ok, _, Req2} = cowboy_req:part(Req),
