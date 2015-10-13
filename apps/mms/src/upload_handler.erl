@@ -5,7 +5,7 @@
 
 -module(upload_handler).
 
--export([init/2]).
+-export([init/2, allowed_methods/2]).
 
 -include("mms.hrl").
 
@@ -96,6 +96,10 @@ init(Req, Opts) ->
                     end
             end
     end.
+
+
+allowed_methods(Req, State) ->
+    {[<<"POST">>], Req, State}.
 
 
 %% ===========================

@@ -3,11 +3,11 @@ notifications:
   email: false
 otp_release:
   - 17.4
-after-success:
+after_success:
   - tools/travis_upload_release.sh
 env:
   global:
-    - TARBALL_NAME=${TRAVIS_BUILD_NUMBER}-${TRAVIS_PULL_REQUEST/false/$TRAVIS_BRANCH}-${TRAVIS_COMMIT:0:6}.tar.gz
+    - TARBALL_NAME=mmserl_${TRAVIS_COMMIT:0:6}.tar.gz
   matrix:
     - SPEC=embedded
     - SPEC=spec1
