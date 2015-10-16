@@ -11,7 +11,7 @@
 -include("mms.hrl").
 
 start() ->
-    {ok, Client} = eredis:start_link(?ENV(redis_host), ?ENV(redis_port)),
+    {ok, Client} = eredis:start_link(?ENV(redis_host), ?ENV(redis_port), 0, ?ENV(redis_pass)),
     register(redis_client, Client).
 
 -spec get(binary()) -> binary() | {error, _}.
