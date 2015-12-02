@@ -74,7 +74,7 @@ get_range(FileId, Range, FileSize) ->
 
 -spec str_to_ranges(binary()) -> [#mms_range{}].
 str_to_ranges(Str) ->
-    RangeStr = [binary:split(X, <<"-">>) || X <- binary:split(Str, <<",">>)],
+    RangeStr = [binary:split(X, <<"-">>) || X <- binary:split(Str, <<",">>, [global])],
     [#mms_range{start_bytes = binary_to_integer(S), end_bytes = binary_to_integer(E)} ||
         [S, E] <- RangeStr].
 
