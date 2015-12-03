@@ -5,18 +5,19 @@ import os
 import requests
 
 ip = '127.0.0.1'
-filename = 'abc.jpg'
+filename = 'test.tar.gz'
 
 config = {
-    'fileid': 'e8db188db96f4f3ba5f9b6e09bbecbfc',
-    'range': 'bytes=0-%s' % (os.path.getsize(filename) - 1),
-    'token': 'ac88f5dca0d9d3055a370c99374413f',
+    'fileid': 'ae3c5a1d7b4b42c5a19cca02588e0cea',
+    'token': '296d4f485769433e32ea7b7159ceb886',
     'type': '1',
     'filesize': os.path.getsize(filename),
     'filename': filename,
     'owner': '4d3b9a253dfb4bf4ac316e08f76b08ff@localhost',
-    'expiration': 1442393886,
-    'mimeType': 'image/jpeg'
+    'expiration': 1449462519,
+    'mimeType': 'image/jpeg',
+    'uploadid': 'E5C79AE6C1EA494FADD9BA82DB5C1E53',
+    'partNumber': 1
 }
 
 

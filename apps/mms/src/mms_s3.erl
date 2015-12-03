@@ -5,7 +5,19 @@
 
 -module(mms_s3).
 
--export([config/0, bucket/1, start/0, get/2, get_object/1, upload/3, secret/0, remove/1]).
+-export([
+    config/0,
+    bucket/1,
+    start/0,
+    get/2,
+    get_object/1,
+    upload/3,
+    secret/0,
+    remove/1,
+    multi_init/1,
+    multi_upload/4,
+    multi_abort/2
+]).
 
 -include_lib("erlcloud/include/erlcloud_aws.hrl").
 -include("mms.hrl").
@@ -75,3 +87,35 @@ remove(#mms_file{uid = Uid, type = Type}) ->
         _:_Reason ->
             error
     end.
+
+multi_init(#mms_file{uid = Uid, type = Type}) ->
+    try erlcloud_s3:start_multipart(bucket(Type), binary_to_list(Uid), [], [], ?S3_CONFIG) of
+        {ok, {uploadId, UploadId}} ->
+            {ok, UploadId}
+    catch
+        _:Reason ->
+            {error, Reason}
+    end.
+
+multi_upload(#mms_file{uid = Uid, type = Type}, UploadId, PartNumber, Content) ->
+    try erlcloud_s3:upload_part(bucket(Type), binary_to_list(Uid),
+        binary_to_list(UploadId), PartNumber, Content, [], ?S3_CONFIG) of
+        {ok, [{etag, ETag}]} ->
+            {ok, list_to_binary(ETag)}
+    catch
+        _:Reason ->
+            ?DEBUG(Reason),
+            {error, Reason}
+    end.
+
+
+multi_abort(#mms_file{uid = Uid, type = Type}, UploadId) ->
+    try
+        erlcloud_s3:abort_multipart(bucket(Type), Uid, UploadId, [], [], ?S3_CONFIG) of
+        R -> R
+    catch
+        _:Reason ->
+            {error, Reason}
+    end.
+
+    
