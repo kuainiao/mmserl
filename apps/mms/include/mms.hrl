@@ -11,29 +11,26 @@
 -define(ENV(Key), mms_lib:get_env(Key)).
 -define(S3_CONFIG, mms_s3:config()).
 -define(MMS_SECRET, mms_s3:secret()).
--define(DEBUG(X), io:format("debug:~p~n", [X])).
+-define(DEBUG(X), io:format("[debug]~p~n", [X])).
 
 
 %% ==================
 %% mms records
 %% ==================
 
--record(mms_range, {
-    start_bytes :: integer(),
-    end_bytes :: integer(),
-    total_bytes :: integer()
-}).
 
 -record(mms_headers, {
     fileid :: binary(),
     filename :: binary(),
     filesize :: integer(),
     type :: binary(),
-    range :: #mms_range{},
     owner :: binary(),
     token :: binary(),
     expiration :: integer(),
-    mimetype ::binary()
+    mimetype :: binary(),
+    multipart :: binary(),
+    uploadid :: binary(),
+    partNumber :: integer()
 }).
 
 -record(mms_file, {
@@ -47,7 +44,10 @@
 
 -record(mms_response, {
     fileid :: binary(),
-    ranges :: [#mms_range{}],
-    code :: integer()
+    code :: integer(),
+    multipart :: true | false,
+    uploadid :: binary(),
+    partNumber :: integer,
+    etag :: binary()
 }).
 

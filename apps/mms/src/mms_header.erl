@@ -6,7 +6,7 @@
 -module(mms_header).
 
 %% API
--export([verify/1, parse/1, parse_body/1]).
+-export([verify/1, parse/1, parse_body/1, sign/5]).
 
 -include("mms.hrl").
 
@@ -18,23 +18,25 @@
 parse(Req) ->
     FileId = parse_fileid(Req),
     FileSize = parse_filesize(Req),
-    Range = parse_range(Req),
     Owner = parse_owner(Req),
     Token = parse_token(Req),
     Expiration = parse_expiration(Req),
-    case lists:member(undefined, [FileId, FileSize, Range, Owner, Token, Expiration]) of
+    case lists:member(undefined, [FileId, FileSize, Owner, Token, Expiration]) of
         true -> false;
         _ ->
+            {IsMultipart, UploadId, PartNumber} = is_multipart(Req),
             #mms_headers{
                 fileid = FileId,
                 filename = parse_filename(Req),
                 filesize = FileSize,
                 type = parse_type(Req),
-                range = Range,
                 owner = Owner,
                 token = Token,
                 expiration = Expiration,
-                mimetype = parse_content_type(Req)
+                mimetype = parse_content_type(Req),
+                multipart = IsMultipart,
+                partNumber = PartNumber,
+                uploadid = UploadId
             }
     end.
 
@@ -51,6 +53,26 @@ parse_filesize(Req) ->
         _:_ -> undefined
     end.
 
+is_multipart(Req) ->
+    case {parse_uploadid(Req), parse_partnum(Req)} of
+        {undefined, _} -> {<<"0">>, undefined, undefined};
+        {_, undefined} -> {<<"0">>, undefined, undefined};
+        {UploadId, Num} -> {<<"1">>, UploadId, Num}
+    end.
+
+parse_partnum(Req) ->
+    try binary_to_integer(cowboy_req:header(<<"partnumber">>, Req)) of
+        Num -> Num
+    catch
+        _:_ -> undefined
+    end.
+
+parse_uploadid(Req) ->
+    case cowboy_req:header(<<"uploadid">>, Req) of
+        <<>> -> undefined;
+        R -> R
+    end.
+
 parse_type(Req) ->
     case cowboy_req:header(<<"type">>, Req, ?MESSAGE) of
         ?AVATAR -> ?AVATAR;
@@ -60,17 +82,6 @@ parse_type(Req) ->
 
 parse_owner(Req) ->
     cowboy_req:header(<<"owner">>, Req, undefined).
-
-parse_range(Req) ->
-    Range = cowboy_req:header(<<"range">>, Req, undefined),
-    case Range of
-        undefined -> undefined;
-        _ ->
-            case range(Range) of
-                undefined -> undefined;
-                R -> R
-            end
-    end.
 
 parse_token(Req) ->
     cowboy_req:header(<<"token">>, Req, undefined).
@@ -103,19 +114,20 @@ stream_uploaded_file(Req, Binary) ->
 %% ==================================
 
 -spec verify(#mms_headers{}) -> true | false.
-verify(#mms_headers{owner = Owner, token = Token, fileid = Uid, expiration = Expiration, type = Type,
-    range = Range, filesize = FileSize}) ->
-    case {generate_timestamp() =< Expiration, Range#mms_range.end_bytes + 1 =< FileSize} of
-        {true, true} ->
-            case mms_redis:get(<<"upload:", Uid/binary>>) of
-                {ok, _} ->
+verify(#mms_headers{owner = Owner, token = Token, fileid = FileId,
+    expiration = Expiration, type = Type, multipart = IsMultipart}) ->
+    case generate_timestamp() =< Expiration of
+        true ->
+            case mms_redis:get(<<"upload:", FileId/binary>>) of
+                {ok, <<IsMultipart:1/binary, _/binary>>} ->
                     E = integer_to_binary(Expiration),
                     S = list_to_binary(?MMS_SECRET),
-                    Token =:= sign(Owner, Uid, E, S, Type);
+                    Token =:= sign(Owner, FileId, E, S, Type);
                 _ ->
                     false
             end;
         _ ->
+            ?DEBUG(<<"expired">>),
             false
     end.
 
@@ -129,18 +141,5 @@ md5(Text) ->
 generate_timestamp() ->
     {M, S, _} = erlang:now(),
     M * 1000000 + S.
-
-%% special range parse, like "bytes=0-600"
-range(<<"bytes=", Rest/binary>>) ->
-    [S, E] = binary:split(Rest, <<"-">>),
-    try {binary_to_integer(S), binary_to_integer(E)} of
-        {SI, EI} ->
-            #mms_range{start_bytes = SI, end_bytes = EI}
-    catch
-        _:_ ->
-            undefined
-    end;
-range(_Range) ->
-    undefined.
 
 

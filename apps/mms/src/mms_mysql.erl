@@ -5,7 +5,12 @@
 
 -module(mms_mysql).
 
--export([start/0, get/1, save/1]).
+-export([
+    start/0,
+    save/1,
+    get_multipart/2,
+    save_multipart/3
+]).
 
 -include("mms.hrl").
 
@@ -33,25 +38,39 @@ log(Module, Line, Level, FormatFun) ->
 %% api
 %% ===========================
 
--spec get(binary()) -> #mms_file{} | {error, _}.
-get(FileId) ->
-    case mysql:fetch(mms_conn, <<"select uid,filename,owner,private,UNIX_timestamp(created_at) from mms_file where id= '",
-    FileId/binary, "';">>) of
-        {selected, {mysql_result, [], [], [], [], []}} ->
-            {error, not_exists};
-        {selected, {mysql_result, Uid, FileName, Owner, Type, CreatedAt}} ->
-            #mms_file{id = FileId, uid = Uid, filename = FileName, owner = Owner,
-                type = Type, created_at = CreatedAt};
-        Reason ->
-            {error, Reason}
-    end.
 
 save(#mms_file{id = FileId, filename = FileName, uid = Uid, type = Type, owner = Owner}) ->
     Query = <<"insert into mms_file(id,uid,filename,owner,type,created_at) values('", FileId/binary, "','",
     Uid/binary, "','", FileName/binary, "', '", Owner/binary, "',", Type/binary, ", now());">>,
     case mysql:fetch(mms_conn, Query) of
-        {updated, {mysql_result, [], [], 1, 0, [], 0, []}} ->
-            FileId;
+        {updated, _} ->
+            {ok, FileId};
         Reason ->
+            ?DEBUG(Reason),
+            {error, Reason}
+    end.
+
+get_multipart(FileId, UploadId) ->
+    Query = <<"select uid from mms_multipart where fileid='",
+    FileId/binary, "' and upload_id='", UploadId/binary, "';">>,
+    case mysql:fetch(mms_conn, Query) of
+        {data, {mysql_result, _, [], 0, 0, [], 0, []}} ->
+            {error, not_exists};
+        {data, {mysql_result, _, [[Uid]], 0, 0, [], 0, []}} ->
+            {ok, Uid};
+        Reason ->
+            ?DEBUG(Reason),
+            {error, Reason}
+    end.
+
+save_multipart(UploadId, PartNumber, Etag) ->
+    N = integer_to_binary(PartNumber),
+    Query = <<"insert into mms_multipart_records(upload_id,part_number,etag) values('",
+    UploadId/binary, "',", N/binary, ",'", Etag/binary, "');">>,
+    case mysql:fetch(mms_conn, Query) of
+        {updated, _} ->
+            ok;
+        Reason ->
+            ?DEBUG(Reason),
             {error, Reason}
     end.

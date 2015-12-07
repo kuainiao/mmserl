@@ -2,7 +2,7 @@ language: erlang
 notifications:
   email: false
 otp_release:
-  - 17.4
+  - 17.5
 after_success:
   - tools/travis_upload_release.sh
 env:

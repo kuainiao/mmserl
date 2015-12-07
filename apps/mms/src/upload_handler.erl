@@ -18,81 +18,83 @@ init(Req, Opts) ->
     case mms_header:parse(Req) of
         #mms_headers{
             filename = FileName,
-            filesize = FileSize,
             fileid = FileId,
             owner = Owner,
-            range = Range,
             type = Type,
-            mimetype = ContentType
+            mimetype = ContentType,
+            multipart = IsMultiPart,
+            uploadid = UploadId,
+            partNumber = PartNumber
         } = Headers ->
-            ?DEBUG(ContentType),
             case mms_header:verify(Headers) of
                 false ->
                     make_response(Req, Opts, #mms_response{
                         fileid = FileId,
-                        ranges = [],
-                        code = 10011
+                        code = 10010,
+                        multipart = IsMultiPart
                     });
                 _ ->
                     {ok, Content, Req3} = mms_header:parse_body(Req),
                     File = #mms_file{id = FileId, filename = FileName, owner = Owner, type = Type},
-                    case mms_lib:get_range(FileId, Range, FileSize) of
-                        {complete, Ranges} ->
+                    case IsMultiPart of
+                        <<"0">> ->
                             Uid = uuid:generate(),
-                            CompleteContent = mms_lib:get_complete_content(Ranges, Content, Range, FileId, Type),
-                            NewFile = File#mms_file{uid = Uid},
-                            case mms_s3:upload(NewFile, CompleteContent, ContentType) of
+                            case mms_s3:upload(File#mms_file{uid = Uid}, Content, ContentType) of
                                 ok ->
-                                    mms_redis:remove(<<"upload:", FileId/binary>>),
-                                    mms_redis:remove(<<"upload_temp:", FileId/binary>>),
-                                    case mms_mysql:save(NewFile) of
+                                    case mms_mysql:save(File#mms_file{uid = Uid}) of
                                         {error, _} ->
                                             make_response(Req3, Opts, #mms_response{
                                                 fileid = FileId,
-                                                ranges = Ranges,
-                                                code = 10012
+                                                code = 10012,
+                                                multipart = IsMultiPart
                                             });
-                                        _ ->
-                                            mms_lib:clear_tempfile(FileId, Type, Ranges),
+                                        {ok, _} ->
+                                            mms_redis:remove(<<"upload:", FileId/binary>>),
                                             make_response(Req3, Opts, #mms_response{
                                                 fileid = FileId,
-                                                ranges = Ranges,
-                                                code = 10001
+                                                code = 10001,
+                                                multipart = IsMultiPart
                                             })
                                     end;
                                 error ->
                                     make_response(Req3, Opts, #mms_response{
                                         fileid = FileId,
-                                        ranges = Ranges,
-                                        code = 10013
+                                        code = 10011,
+                                        multipart = IsMultiPart
                                     })
                             end;
-                        {append, Ranges} ->
-                            SBin = integer_to_binary(Range#mms_range.start_bytes),
-                            EBin = integer_to_binary(Range#mms_range.end_bytes),
-                            case mms_s3:upload(#mms_file{
-                                uid = <<FileId/binary, "-", SBin/binary, "-", EBin/binary>>
-                                , type = Type}, Content, ContentType) of
-                                ok ->
-                                    mms_redis:insert(<<"upload_temp:", FileId/binary>>, mms_lib:ranges_to_str(Ranges)),
-                                    make_response(Req3, Opts, #mms_response{
-                                        fileid = FileId,
-                                        ranges = Ranges,
-                                        code = 10002
-                                    });
-                                error ->
-                                    make_response(Req3, Opts, #mms_response{
-                                        fileid = FileId,
-                                        ranges = Ranges,
-                                        code = 10013
-                                    })
-                            end;
-                        {error, Ranges} ->
-                            make_response(Req3, Opts, #mms_response{
+                        <<"1">> ->
+                            Response = #mms_response{
                                 fileid = FileId,
-                                ranges = Ranges,
-                                code = 10014
-                            })
+                                multipart = IsMultiPart,
+                                uploadid = UploadId,
+                                partNumber = PartNumber
+                            },
+                            case mms_mysql:get_multipart(FileId, UploadId) of
+                                {ok, Uid} ->
+                                    case mms_s3:multi_upload(File#mms_file{uid = Uid}, UploadId, PartNumber, Content) of
+                                        {ok, Etag} ->
+                                            case mms_mysql:save_multipart(UploadId, PartNumber, Etag) of
+                                                ok ->
+                                                    make_response(Req3, Opts, Response#mms_response{
+                                                        code = 10002,
+                                                        etag = Etag
+                                                    });
+                                                {error, _} ->
+                                                    make_response(Req3, Opts, Response#mms_response{
+                                                        code = 10013
+                                                    })
+                                            end;
+                                        {error, _} ->
+                                            make_response(Req3, Opts, Response#mms_response{
+                                                code = 10014
+                                            })
+                                    end;
+                                {error, _} ->
+                                    make_response(Req3, Opts, Response#mms_response{
+                                        code = 10015
+                                    })
+                            end
                     end
             end
     end.
@@ -114,7 +116,24 @@ make_response(Req, Opts, Response) ->
            end,
     mms_response:response(Req, Opts, Resp, Code, <<"application/json">>).
 
-response_to_json(#mms_response{fileid = FileId, ranges = Ranges, code = Err}) ->
-    R = mms_lib:ranges_to_str(Ranges),
-    E = integer_to_binary(Err),
-    <<"{\"fileid\":\"", FileId/binary, "\",\"ranges\":\"", R/binary, "\",\"code\":", E/binary, "}">>.
+response_to_json(Response) ->
+    [_ | L] = tuple_to_list(Response),
+    Json = lists:filter(fun({_, Value}) ->
+        case Value of
+            undefined -> false;
+            null -> false;
+            _ -> true
+        end
+    end, lists:zip(record_info(fields, mms_response), L)),
+    StrList = ["\"" ++ to_list(K) ++ "\":\"" ++ to_list(V) ++ "\"" || {K, V} <- Json],
+    "{" ++ string:join(StrList, ",") ++ "}".
+
+to_list(Value) when is_atom(Value) ->
+    atom_to_list(Value);
+to_list(Value) when is_integer(Value) ->
+    integer_to_list(Value);
+to_list(Value) when is_binary(Value) ->
+    binary_to_list(Value);
+to_list(_) ->
+    "undefined".
+
