@@ -101,7 +101,7 @@ multi_upload(#mms_file{uid = Uid, type = Type}, UploadId, PartNumber, Content) -
     try erlcloud_s3:upload_part(bucket(Type), binary_to_list(Uid),
         binary_to_list(UploadId), PartNumber, Content, [], ?S3_CONFIG) of
         {ok, [{etag, ETag}]} ->
-            {ok, list_to_binary(ETag)}
+            {ok, list_to_binary(trim_etag(ETag))}
     catch
         _:Reason ->
             ?DEBUG(Reason),
@@ -118,4 +118,6 @@ multi_abort(#mms_file{uid = Uid, type = Type}, UploadId) ->
             {error, Reason}
     end.
 
-    
+trim_etag(ETag) ->
+    T = ETag -- "\"",
+    T -- "\"".
