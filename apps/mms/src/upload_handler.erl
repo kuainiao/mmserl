@@ -34,32 +34,41 @@ init(Req, Opts) ->
                         multipart = IsMultiPart
                     });
                 _ ->
-                    {ok, Content, Req3} = mms_header:parse_body(Req),
                     File = #mms_file{id = FileId, filename = FileName, owner = Owner, type = Type},
                     case IsMultiPart of
                         <<"0">> ->
                             Uid = uuid:generate(),
-                            case mms_s3:upload(File#mms_file{uid = Uid}, Content, ContentType) of
-                                ok ->
-                                    case mms_mysql:save(File#mms_file{uid = Uid}) of
-                                        {error, _} ->
+                            case mms_header:parse_body(Req) of
+                                {ok, Content, Req3} ->
+                                    case mms_s3:upload(File#mms_file{uid = Uid}, Content, ContentType) of
+                                        ok ->
+                                            case mms_mysql:save(File#mms_file{uid = Uid}) of
+                                                {error, _} ->
+                                                    make_response(Req3, Opts, #mms_response{
+                                                        fileid = FileId,
+                                                        code = 10012,
+                                                        multipart = IsMultiPart
+                                                    });
+                                                {ok, _} ->
+                                                    mms_redis:remove(<<"upload:", FileId/binary>>),
+                                                    make_response(Req3, Opts, #mms_response{
+                                                        fileid = FileId,
+                                                        code = 10001,
+                                                        multipart = IsMultiPart
+                                                    })
+                                            end;
+                                        error ->
                                             make_response(Req3, Opts, #mms_response{
                                                 fileid = FileId,
-                                                code = 10012,
-                                                multipart = IsMultiPart
-                                            });
-                                        {ok, _} ->
-                                            mms_redis:remove(<<"upload:", FileId/binary>>),
-                                            make_response(Req3, Opts, #mms_response{
-                                                fileid = FileId,
-                                                code = 10001,
+                                                code = 10011,
                                                 multipart = IsMultiPart
                                             })
                                     end;
-                                error ->
-                                    make_response(Req3, Opts, #mms_response{
+                                _Reason ->
+                                    ?DEBUG(_Reason),
+                                    make_response(Req, Opts, #mms_response{
                                         fileid = FileId,
-                                        code = 10011,
+                                        code = 10020,
                                         multipart = IsMultiPart
                                     })
                             end;
@@ -70,31 +79,51 @@ init(Req, Opts) ->
                                 uploadid = UploadId,
                                 partNumber = PartNumber
                             },
-                            case mms_mysql:get_multipart(FileId, UploadId) of
-                                {ok, Uid} ->
-                                    case mms_s3:multi_upload(File#mms_file{uid = Uid}, UploadId, PartNumber, Content) of
-                                        {ok, Etag} ->
-                                            case mms_mysql:save_multipart(UploadId, PartNumber, Etag) of
-                                                ok ->
-                                                    make_response(Req3, Opts, Response#mms_response{
-                                                        code = 10002,
-                                                        etag = Etag
-                                                    });
-                                                {error, _} ->
-                                                    make_response(Req3, Opts, Response#mms_response{
-                                                        code = 10013
+                            case mms_mysql:check_part(UploadId, PartNumber) of
+                                ok ->
+                                    case mms_mysql:get_multipart(FileId, UploadId) of
+                                        {ok, Uid} ->
+                                            case mms_header:parse_body(Req) of
+                                                {ok, Content, Req3} ->
+                                                    case mms_s3:multi_upload(File#mms_file{uid = Uid},
+                                                        UploadId, PartNumber, Content) of
+                                                        {ok, Etag} ->
+                                                            case mms_mysql:save_multipart(UploadId, PartNumber, Etag) of
+                                                                ok ->
+                                                                    make_response(Req3, Opts, Response#mms_response{
+                                                                        code = 10002,
+                                                                        etag = Etag
+                                                                    });
+                                                                {error, _} ->
+                                                                    make_response(Req3, Opts, Response#mms_response{
+                                                                        code = 10013
+                                                                    })
+                                                            end;
+                                                        {error, _} ->
+                                                            make_response(Req3, Opts, Response#mms_response{
+                                                                code = 10014
+                                                            })
+                                                    end;
+                                                _Reason ->
+                                                    ?DEBUG(_Reason),
+                                                    make_response(Req, Opts, #mms_response{
+                                                        fileid = FileId,
+                                                        code = 10020,
+                                                        multipart = IsMultiPart
                                                     })
                                             end;
                                         {error, _} ->
-                                            make_response(Req3, Opts, Response#mms_response{
-                                                code = 10014
+                                            make_response(Req, Opts, Response#mms_response{
+                                                code = 10015
                                             })
                                     end;
-                                {error, _} ->
-                                    make_response(Req3, Opts, Response#mms_response{
-                                        code = 10015
+                                _ ->
+                                    make_response(Req, Opts, Response#mms_response{
+                                        code = 10013
                                     })
                             end
+
+
                     end
             end
     end.

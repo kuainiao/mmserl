@@ -9,6 +9,7 @@
     start/0,
     save/1,
     get_multipart/2,
+    check_part/2,
     save_multipart/3
 ]).
 
@@ -58,6 +59,20 @@ get_multipart(FileId, UploadId) ->
             {error, not_exists};
         {data, {mysql_result, _, [[Uid]], 0, 0, [], 0, []}} ->
             {ok, Uid};
+        Reason ->
+            ?DEBUG(Reason),
+            {error, Reason}
+    end.
+
+check_part(UploadId, PartNumber) ->
+    N = integer_to_binary(PartNumber),
+    Query = <<"select count(id) from mms_multipart_records where upload_id='",
+    UploadId/binary, "' and part_number='", N/binary, "';">>,
+    case mysql:fetch(mms_conn, Query) of
+        {data, {mysql_result, _, [[0]], 0, 0, [], 0, []}} ->
+            ok;
+        {data, {mysql_result, _, [[_]], 0, 0, [], 0, []}} ->
+            {error, duplicated};
         Reason ->
             ?DEBUG(Reason),
             {error, Reason}
