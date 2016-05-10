@@ -15,6 +15,7 @@
 -include("mms.hrl").
 
 app_start() ->
+    lager:start(),
     mms_s3:start(),
     mms_mysql:start(),
     mms_redis:start().

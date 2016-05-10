@@ -11,8 +11,9 @@
 -define(ENV(Key), mms_lib:get_env(Key)).
 -define(S3_CONFIG, mms_s3:config()).
 -define(MMS_SECRET, mms_s3:secret()).
--define(DEBUG(X), io:format("[debug]~p~n", [X])).
 
+-define(DEBUG(X), lager:debug("~p~n", [X])).
+-define(INFO(X), lager:debug("~p~n", [X])).
 
 %% ==================
 %% mms records

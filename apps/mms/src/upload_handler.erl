@@ -15,6 +15,7 @@
 %% =========================
 
 init(Req, Opts) ->
+    ?DEBUG(Req),
     case mms_header:parse(Req) of
         #mms_headers{
             fileid = FileId,
