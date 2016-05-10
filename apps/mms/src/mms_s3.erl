@@ -93,7 +93,9 @@ remove(#mms_file{uid = Uid, type = Type}) ->
 multi_init(#mms_file{uid = Uid, type = Type}) ->
     try erlcloud_s3:start_multipart(bucket(Type), binary_to_list(Uid), [], [], ?S3_CONFIG) of
         {ok, {uploadId, UploadId}} ->
-            {ok, UploadId}
+            {ok, UploadId};
+        _Reason ->
+            {error, _Reason}
     catch
         _:Reason ->
             {error, Reason}
@@ -103,7 +105,10 @@ multi_upload(#mms_file{uid = Uid, type = Type}, UploadId, PartNumber, Content) -
     try erlcloud_s3:upload_part(bucket(Type), binary_to_list(Uid),
         binary_to_list(UploadId), PartNumber, Content, [], ?S3_CONFIG) of
         {ok, [{etag, ETag}]} ->
-            {ok, list_to_binary(trim_etag(ETag))}
+            {ok, list_to_binary(trim_etag(ETag))};
+        _Reason ->
+            ?DEBUG(_Reason),
+            {error, _Reason}
     catch
         _:Reason ->
             ?DEBUG(Reason),
